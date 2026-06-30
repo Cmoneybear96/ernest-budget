@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bernard Budget">
+<title>Bernard Household Budget</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --navy:#0f172a; --navy2:#1e293b; --gold:#d4af37; --gold2:#f0cc5a;
+    --white:#ffffff; --bg:#f1f5f9; --card:#ffffff;
+    --text:#0f172a; --muted:#64748b; --border:#e2e8f0;
+    --green:#16a34a; --red:#dc2626; --blue:#2563eb; --purple:#7c3aed;
+    --orange:#ea580c;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);overscroll-behavior:none}
+
+  /* Layout */
+  #app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+  #topbar{background:var(--navy);color:var(--white);padding:calc(var(--safe-top) + 12px) 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0}
+  .topbar-title{font-size:17px;font-weight:700;color:var(--gold)}
+  .month-nav{display:flex;align-items:center;gap:8px}
+  .month-nav button{background:rgba(255,255,255,.12);border:none;color:var(--white);width:30px;height:30px;border-radius:8px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .month-nav button:active{opacity:.7}
+  #month-label{font-size:14px;font-weight:600;min-width:90px;text-align:center}
+
+  .tab-content{flex:1;overflow-y:auto;padding:16px 16px calc(80px + var(--safe-bot));display:none}
+  .tab-content.active{display:block}
+
+  #navbar{background:var(--navy2);border-top:1px solid rgba(255,255,255,.08);padding:0 0 calc(var(--safe-bot)) 0;display:flex;flex-shrink:0;position:sticky;bottom:0}
+  .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px 10px;gap:3px;cursor:pointer;color:var(--muted);border:none;background:none;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;transition:color .15s}
+  .nav-item .nav-icon{font-size:20px;line-height:1}
+  .nav-item.active{color:var(--gold)}
+
+  /* Cards */
+  .card{background:var(--card);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
+
+  /* Summary row cards */
+  .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .stat-card{background:var(--card);border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .stat-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px}
+  .stat-value{font-size:22px;font-weight:800;letter-spacing:-.5px}
+  .stat-value.green{color:var(--green)} .stat-value.red{color:var(--red)}
+  .stat-value.blue{color:var(--blue)} .stat-value.gold{color:var(--gold)}
+  .stat-sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+  /* Progress bars */
+  .prog-wrap{margin-bottom:12px}
+  .prog-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+  .prog-label{font-size:13px;font-weight:600}
+  .prog-amounts{font-size:12px;color:var(--muted)}
+  .prog-bar{height:8px;background:var(--border);border-radius:99px;overflow:hidden}
+  .prog-fill{height:100%;border-radius:99px;transition:width .4s ease}
+  .prog-fill.ok{background:var(--green)}
+  .prog-fill.warn{background:var(--orange)}
+  .prog-fill.over{background:var(--red)}
+
+  /* Spending tab */
+  .tx-list{display:flex;flex-direction:column;gap:1px;border-radius:12px;overflow:hidden}
+  .tx-item{background:var(--card);padding:12px 14px;display:flex;align-items:center;gap:12px}
+  .tx-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .tx-info{flex:1;min-width:0}
+  .tx-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tx-meta{font-size:12px;color:var(--muted)}
+  .tx-amt{font-size:15px;font-weight:700;flex-shrink:0;color:var(--red)}
+
+  /* FAB */
+  #fab{position:fixed;right:20px;bottom:calc(80px + var(--safe-bot) + 14px);width:56px;height:56px;border-radius:50%;background:var(--gold);border:none;font-size:26px;color:var(--navy);box-shadow:0 4px 16px rgba(212,175,55,.45);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:100;transition:transform .15s}
+  #fab:active{transform:scale(.94)}
+  #fab.hidden{display:none}
+
+  /* Modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:flex-end}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--card);border-radius:24px 24px 0 0;padding:20px 20px calc(20px + var(--safe-bot));width:100%;max-height:90vh;overflow-y:auto}
+  .modal-handle{width:40px;height:4px;background:var(--border);border-radius:99px;margin:0 auto 16px}
+  .modal-title{font-size:18px;font-weight:800;margin-bottom:16px}
+  label{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px;margin-top:14px}
+  label:first-of-type{margin-top:0}
+  input,select{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;color:var(--text);background:var(--bg);outline:none;-webkit-appearance:none}
+  input:focus,select:focus{border-color:var(--gold)}
+  .who-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .who-btn{padding:10px;border:1.5px solid var(--border);background:var(--bg);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted)}
+  .who-btn.sel{border-color:var(--gold);background:rgba(212,175,55,.1);color:var(--navy)}
+  .btn-primary{width:100%;padding:15px;background:var(--navy);color:var(--white);border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:18px}
+  .btn-primary:active{opacity:.85}
+  .btn-danger{background:var(--red)}
+
+  /* Goals tab */
+  .goal-card{background:var(--card);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .goal-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .goal-icon{font-size:26px}
+  .goal-title{font-size:16px;font-weight:800}
+  .goal-sub{font-size:12px;color:var(--muted)}
+  .goal-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
+  .goal-stat{text-align:center;background:var(--bg);border-radius:10px;padding:10px 6px}
+  .goal-stat-val{font-size:15px;font-weight:800}
+  .goal-stat-lbl{font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.3px}
+
+  /* Net Worth tab */
+  .nw-total{background:var(--navy);border-radius:20px;padding:22px;margin-bottom:14px;text-align:center}
+  .nw-total-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-bottom:6px}
+  .nw-total-val{font-size:36px;font-weight:900;color:var(--gold);letter-spacing:-1px}
+  .nw-section{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .nw-box{background:var(--card);border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .nw-box-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+  .nw-box-title.assets{color:var(--green)} .nw-box-title.liabs{color:var(--red)}
+  .nw-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+  .nw-row:last-child{border-bottom:none;font-weight:700}
+  .nw-row-name{font-size:12px;color:var(--muted)}
+  .nw-row-val{font-size:13px;font-weight:600}
+  .nw-row-val.pos{color:var(--green)} .nw-row-val.neg{color:var(--red)}
+
+  /* Budget tab */
+  .budget-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+  .budget-row:last-child{border-bottom:none}
+  .budget-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .budget-info{flex:1;min-width:0}
+  .budget-name{font-size:13px;font-weight:600}
+  .budget-owner{font-size:11px;color:var(--muted)}
+  .budget-amt{font-size:14px;font-weight:700;flex-shrink:0;color:var(--muted)}
+
+  /* Category pills */
+  .cat-scroll{display:flex;gap:8px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+  .cat-scroll::-webkit-scrollbar{display:none}
+  .cat-pill{flex-shrink:0;padding:6px 14px;border-radius:99px;border:1.5px solid var(--border);background:var(--card);font-size:13px;font-weight:600;cursor:pointer;color:var(--muted)}
+  .cat-pill.sel{background:var(--navy);color:var(--white);border-color:var(--navy)}
+
+  /* Edit inputs */
+  .edit-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
+  .edit-row:last-child{border-bottom:none}
+  .edit-name{flex:1;font-size:13px;font-weight:600}
+  .edit-input{width:90px;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;text-align:right}
+
+  .empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
+  .empty-icon{font-size:48px;margin-bottom:12px}
+  .empty-text{font-size:15px;font-weight:500}
+
+  /* Toast */
+  #toast{position:fixed;bottom:calc(90px + var(--safe-bot));left:50%;transform:translateX(-50%) translateY(20px);background:var(--navy);color:var(--white);padding:10px 20px;border-radius:99px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:all .25s;white-space:nowrap;z-index:300}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .section-divider{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:16px 0 8px;padding-left:2px}
+
+  /* Chart container */
+  .chart-wrap{position:relative;height:180px;margin:0 -4px}
+
+  /* Settings button */
+  .icon-btn{background:none;border:none;font-size:20px;cursor:pointer;padding:4px;opacity:.7}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div style="font-size:20px">💰</div>
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">‹</button>
+      <div id="month-label"></div>
+      <button onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="topbar-title">Ernest</div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="tab-dash" class="tab-content active">
+    <div class="summary-grid" id="dash-stats"></div>
+    <div class="card">
+      <div class="card-title">Spending by Group</div>
+      <div class="chart-wrap"><canvas id="spendChart"></canvas></div>
+    </div>
+    <div class="card" id="dash-progress">
+      <div class="card-title">Budget vs Actual</div>
+    </div>
+  </div>
+
+  <!-- SPENDING -->
+  <div id="tab-spend" class="tab-content">
+    <div class="cat-scroll" id="cat-filter"></div>
+    <div id="tx-list-wrap"></div>
+  </div>
+
+  <!-- GOALS -->
+  <div id="tab-goals" class="tab-content">
+    <div id="goals-wrap"></div>
+  </div>
+
+  <!-- NET WORTH -->
+  <div id="tab-nw" class="tab-content">
+    <div class="nw-total">
+      <div class="nw-total-label">Net Worth</div>
+      <div class="nw-total-val" id="nw-total">$0</div>
+    </div>
+    <div class="nw-section">
+      <div class="nw-box" id="nw-assets-box">
+        <div class="nw-box-title assets">Assets</div>
+      </div>
+      <div class="nw-box" id="nw-liabs-box">
+        <div class="nw-box-title liabs">Liabilities</div>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="openNWModal()">✏️ Update Net Worth</button>
+  </div>
+
+  <!-- BUDGET -->
+  <div id="tab-budget" class="tab-content">
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:16px;font-weight:800">Monthly Budget</div>
+        <button class="btn-primary" style="width:auto;padding:8px 14px;font-size:13px;margin:0" onclick="saveBudgetEdits()">Save</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--bg);border-radius:12px;padding:12px">
+        <div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Chris Income</div><div style="font-size:18px;font-weight:800;color:var(--blue)" id="inc-chris-disp">$7,452</div></div>
+        <div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Rose Income</div><div style="font-size:18px;font-weight:800;color:var(--purple)" id="inc-rose-disp">$6,200</div></div>
+      </div>
+    </div>
+    <div id="budget-list-wrap"></div>
+  </div>
+
+  <nav id="navbar">
+    <button class="nav-item active" onclick="switchTab('dash',this)"><span class="nav-icon">📊</span>Dashboard</button>
+    <button class="nav-item" onclick="switchTab('spend',this)"><span class="nav-icon">💳</span>Spending</button>
+    <button class="nav-item" onclick="switchTab('goals',this)"><span class="nav-icon">🎯</span>Goals</button>
+    <button class="nav-item" onclick="switchTab('nw',this)"><span class="nav-icon">💼</span>Net Worth</button>
+    <button class="nav-item" onclick="switchTab('budget',this)"><span class="nav-icon">📋</span>Budget</button>
+  </nav>
+</div>
+
+<button id="fab" onclick="openAddTx()">+</button>
+<div id="toast"></div>
+
+<!-- ADD TRANSACTION MODAL -->
+<div class="modal-bg" id="tx-modal" onclick="if(event.target===this)closeTxModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="tx-modal-title">Add Transaction</div>
+    <label>Amount ($)</label>
+    <input type="number" id="tx-amt" inputmode="decimal" placeholder="0.00" step="0.01">
+    <label>Category</label>
+    <select id="tx-cat"></select>
+    <label>Note (optional)</label>
+    <input type="text" id="tx-note" placeholder="What was it for?">
+    <label>Date</label>
+    <input type="date" id="tx-date">
+    <label>Who paid?</label>
+    <div class="who-btns">
+      <button class="who-btn sel" onclick="setWho('Chris',this)">Chris</button>
+      <button class="who-btn" onclick="setWho('Rose',this)">Rose</button>
+      <button class="who-btn" onclick="setWho('Both',this)">Both</button>
+    </div>
+    <button class="btn-primary" onclick="saveTx()" id="tx-save-btn">Add Transaction</button>
+    <button class="btn-primary btn-danger" id="tx-del-btn" onclick="deleteTx()" style="margin-top:8px;display:none">Delete</button>
+  </div>
+</div>
+
+<!-- GOALS EDIT MODAL -->
+<div class="modal-bg" id="goal-modal" onclick="if(event.target===this)closeGoalModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="goal-modal-title">Update Goal</div>
+    <label>Current Balance ($)</label>
+    <input type="number" id="goal-balance" inputmode="decimal" placeholder="0.00">
+    <label>Monthly Contribution ($)</label>
+    <input type="number" id="goal-monthly" inputmode="decimal" placeholder="500">
+    <label>Target Amount ($) — leave 0 for open-ended</label>
+    <input type="number" id="goal-target" inputmode="decimal" placeholder="65000">
+    <button class="btn-primary" onclick="saveGoal()">Save</button>
+  </div>
+</div>
+
+<!-- NET WORTH EDIT MODAL -->
+<div class="modal-bg" id="nw-modal" onclick="if(event.target===this)closeNWModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Update Net Worth</div>
+    <div id="nw-edit-wrap"></div>
+    <button class="btn-primary" onclick="saveNW()">Save</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// DATA MODEL
+// ════════════════════════════════════════════════════════════════
+const DEFAULT_BUDGET = {
+  income: { chris: 7452, rose: 6200, chrisBonus: 2500, roseBonus: 583 },
+  categories: [
+    // Housing
+    {id:'mortgage',name:'Mortgage + Tax',budget:6007,group:'Housing',owner:'Both',color:'#ef4444'},
+    {id:'hoa',name:'HOA',budget:678,group:'Housing',owner:'Both',color:'#f97316'},
+    {id:'home_ins',name:'Home Insurance',budget:47,group:'Housing',owner:'Both',color:'#f59e0b'},
+    {id:'electric',name:'Electric Bill',budget:150,group:'Housing',owner:'Both',color:'#eab308'},
+    {id:'internet',name:'Internet',budget:49.99,group:'Housing',owner:'Both',color:'#84cc16'},
+    // Personal
+    {id:'student_loans',name:'Student Loans',budget:195,group:'Personal',owner:'Chris',color:'#22c55e'},
+    {id:'car_ins',name:'Car Insurance',budget:310,group:'Personal',owner:'Chris',color:'#10b981'},
+    {id:'parking',name:'Parking',budget:225,group:'Personal',owner:'Chris',color:'#14b8a6'},
+    {id:'life_ins',name:'Life Insurance',budget:67,group:'Personal',owner:'Both',color:'#06b6d4'},
+    // Subscriptions
+    {id:'chatgpt',name:'ChatGPT',budget:21.24,group:'Subscriptions',owner:'Chris',color:'#3b82f6'},
+    {id:'claude',name:'Claude AI',budget:20,group:'Subscriptions',owner:'Chris',color:'#6366f1'},
+    {id:'hulu',name:'Hulu/ESPN+/Disney+',budget:6.98,group:'Subscriptions',owner:'Chris',color:'#8b5cf6'},
+    {id:'google_one',name:'Google One',budget:19.99,group:'Subscriptions',owner:'Chris',color:'#a855f7'},
+    {id:'amazon',name:'Amazon Prime',budget:12.61,group:'Subscriptions',owner:'Rose',color:'#d946ef'},
+    {id:'briteco',name:'Briteco Insurance',budget:25.95,group:'Subscriptions',owner:'Both',color:'#ec4899'},
+    {id:'oura',name:'Oura Ring',budget:12,group:'Subscriptions',owner:'Both',color:'#f43f5e'},
+    {id:'spotify',name:'Spotify',budget:12.99,group:'Subscriptions',owner:'Chris',color:'#22c55e'},
+    {id:'xbox',name:'Xbox / Game Pass',budget:14.99,group:'Subscriptions',owner:'Chris',color:'#107c10'},
+    {id:'apple_sub_c',name:'Apple Sub (Chris)',budget:7.99,group:'Subscriptions',owner:'Chris',color:'#6b7280'},
+    {id:'apple_sub_r',name:'Apple Sub (Rose)',budget:0.99,group:'Subscriptions',owner:'Rose',color:'#9ca3af'},
+    // Pet
+    {id:'dog_food',name:"Louie's Dog Food",budget:127.82,group:'Louie',owner:'Rose',color:'#a16207'},
+    {id:'grooming',name:"Louie's Grooming",budget:130,group:'Louie',owner:'Rose',color:'#ca8a04'},
+    {id:'vet',name:"Louie's Vet",budget:34.75,group:'Louie',owner:'Rose',color:'#d97706'},
+    {id:'pet_ins',name:"Louie's Pet Insurance",budget:111.68,group:'Louie',owner:'Rose',color:'#f59e0b'},
+    // Variable
+    {id:'groceries',name:'Groceries',budget:1000,group:'Living',owner:'Both',color:'#84cc16'},
+    {id:'eating_out',name:'Eating Out',budget:1000,group:'Living',owner:'Both',color:'#22c55e'},
+    {id:'shopping',name:'Shopping',budget:300,group:'Living',owner:'Both',color:'#06b6d4'},
+    {id:'gym',name:'Gym',budget:70,group:'Living',owner:'Both',color:'#3b82f6'},
+    {id:'cleaners',name:'Cleaners',budget:100,group:'Living',owner:'Both',color:'#8b5cf6'},
+    {id:'ezpass',name:'EZPass',budget:75,group:'Transport',owner:'Chris',color:'#f97316'},
+    {id:'gas',name:'Gas',budget:60,group:'Transport',owner:'Chris',color:'#ef4444'},
+    {id:'train',name:'Train',budget:25,group:'Transport',owner:'Both',color:'#6366f1'},
+    {id:'uber',name:'Uber',budget:100,group:'Transport',owner:'Both',color:'#1d1d1f'},
+  ],
+  goals: [
+    {id:'emergency',name:'Emergency Fund',icon:'🛡️',target:66000,current:89000,monthly:0,color:'#22c55e'},
+    {id:'k401',name:'Backdoor Roth IRA',icon:'🏦',target:14000,current:0,monthly:1167,color:'#3b82f6',isYearly:true},
+    {id:'brokerage',name:'Brokerage / Invest.',icon:'📈',target:0,current:0,monthly:1433,color:'#8b5cf6'},
+  ],
+  netWorth: {
+    assets:[
+      {name:'Condo (Market Value)',value:1245000,type:'Real Estate'},
+      {name:'HYSA + Savings (Chris)',value:29000,type:'Cash'},
+      {name:'Rose Checking/Savings',value:0,type:'Cash'},
+      {name:'Chris 401k',value:120000,type:'Retirement'},
+      {name:'Rose 401k',value:55389,type:'Retirement'},
+      {name:'Roth IRA',value:3800,type:'Retirement'},
+      {name:'M1 Finance (Chris)',value:27000,type:'Investments'},
+      {name:'Rose Investment Portfolio',value:60000,type:'Investments'},
+      {name:'Rose Trading Account',value:10000,type:'Investments'},
+      {name:'Crypto',value:3500,type:'Investments'},
+      {name:'Porsche (Chris)',value:35000,type:'Vehicle'},
+      {name:'Mercedes (Chris)',value:17000,type:'Vehicle'},
+    ],
+    liabilities:[
+      {name:'Mortgage Balance',value:650000,type:'Mortgage'},
+      {name:'Student Loans',value:12628,type:'Student Loan'},
+      {name:'Rose Student Loans',value:0,type:'Student Loan'},
+    ]
+  }
+};
+
+// ════════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════════
+let state = {
+  currentMonth: new Date().getMonth(),
+  currentYear: new Date().getFullYear(),
+  budget: null,
+  transactions: {},  // { "YYYY-MM": [{id,catId,amount,note,date,who}] }
+  goals: null,
+  netWorth: null,
+};
+
+function load() {
+  const b = localStorage.getItem('eb_budget');
+  const t = localStorage.getItem('eb_transactions');
+  const g = localStorage.getItem('eb_goals');
+  const nw = localStorage.getItem('eb_networth');
+  state.budget    = b  ? JSON.parse(b)  : JSON.parse(JSON.stringify(DEFAULT_BUDGET));
+  state.transactions = t ? JSON.parse(t) : {};
+  state.goals     = g  ? JSON.parse(g)  : JSON.parse(JSON.stringify(DEFAULT_BUDGET.goals));
+  state.netWorth  = nw ? JSON.parse(nw) : JSON.parse(JSON.stringify(DEFAULT_BUDGET.netWorth));
+}
+function save() {
+  localStorage.setItem('eb_budget',       JSON.stringify(state.budget));
+  localStorage.setItem('eb_transactions', JSON.stringify(state.transactions));
+  localStorage.setItem('eb_goals',        JSON.stringify(state.goals));
+  localStorage.setItem('eb_networth',     JSON.stringify(state.netWorth));
+}
+
+// ════════════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════════════
+const fmt = n => '$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:n%1===0?0:2,maximumFractionDigits:2});
+const fmtS = n => (n<0?'-':'')+fmt(n);
+const monthKey = () => `${state.currentYear}-${String(state.currentMonth+1).padStart(2,'0')}`;
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function getMonthTx() {
+  return state.transactions[monthKey()] || [];
+}
+function catById(id) { return state.budget.categories.find(c=>c.id===id); }
+
+function spentByCategory() {
+  const map = {};
+  getMonthTx().forEach(tx => {
+    map[tx.catId] = (map[tx.catId]||0) + tx.amount;
+  });
+  return map;
+}
+
+function totalBudget() { return state.budget.categories.reduce((s,c)=>s+c.budget,0); }
+function totalSpent()  { return Object.values(spentByCategory()).reduce((s,v)=>s+v,0); }
+function totalIncome() { return state.budget.income.chris + state.budget.income.rose; }
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+// ════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════════════════════════
+let currentTab = 'dash';
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  btn.classList.add('active');
+  currentTab = tab;
+  document.getElementById('fab').classList.toggle('hidden', tab !== 'spend');
+  renderTab(tab);
+}
+
+function changeMonth(delta) {
+  state.currentMonth += delta;
+  if (state.currentMonth > 11) { state.currentMonth = 0; state.currentYear++; }
+  if (state.currentMonth < 0)  { state.currentMonth = 11; state.currentYear--; }
+  updateMonthLabel();
+  renderTab(currentTab);
+}
+
+function updateMonthLabel() {
+  document.getElementById('month-label').textContent =
+    MONTHS[state.currentMonth].slice(0,3) + ' ' + state.currentYear;
+}
+
+function renderTab(tab) {
+  if (tab==='dash')   renderDash();
+  if (tab==='spend')  renderSpend();
+  if (tab==='goals')  renderGoals();
+  if (tab==='nw')     renderNW();
+  if (tab==='budget') renderBudget();
+}
+
+// ════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════════════════════════════════════
+let spendChartInst = null;
+function renderDash() {
+  const spent  = totalSpent();
+  const budget = totalBudget();
+  const income = totalIncome();
+  const remaining = income - spent;
+  const savingsTarget = state.goals.reduce((s,g)=>s+g.monthly,0);
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Total Income</div>
+      <div class="stat-value blue">${fmt(income)}</div>
+      <div class="stat-sub">Chris + Rose</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Spent This Month</div>
+      <div class="stat-value ${spent>budget?'red':'orange'}">${fmt(spent)}</div>
+      <div class="stat-sub">of ${fmt(budget)} budget</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Remaining</div>
+      <div class="stat-value ${remaining>=0?'green':'red'}">${fmtS(remaining)}</div>
+      <div class="stat-sub">after tracked spending</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Savings Target</div>
+      <div class="stat-value gold">${fmt(savingsTarget)}</div>
+      <div class="stat-sub">19% · no bonus needed</div>
+    </div>
+  `;
+
+  // Spending by group chart
+  const spentMap = spentByCategory();
+  const groups = {};
+  state.budget.categories.forEach(c=>{
+    const s = spentMap[c.id]||0;
+    if (!groups[c.group]) groups[c.group]={spent:0,budget:0,color:c.color};
+    groups[c.group].spent  += s;
+    groups[c.group].budget += c.budget;
+  });
+  const labels = Object.keys(groups);
+  const data   = labels.map(g=>groups[g].spent||0);
+  const colors = labels.map(g=>groups[g].color);
+
+  const ctx = document.getElementById('spendChart').getContext('2d');
+  if (spendChartInst) spendChartInst.destroy();
+  spendChartInst = new Chart(ctx, {
+    type:'doughnut',
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderWidth:2, borderColor:'#fff' }] },
+    options:{
+      responsive:true, maintainAspectRatio:false, cutout:'68%',
+      plugins:{
+        legend:{ display:true, position:'right', labels:{ boxWidth:10, font:{size:11}, color:'#64748b' }},
+        tooltip:{ callbacks:{ label: ctx => ` ${fmt(ctx.raw)}` }}
+      }
+    }
+  });
+
+  // Progress bars
+  const prog = document.getElementById('dash-progress');
+  const highSpend = state.budget.categories
+    .filter(c=>(spentMap[c.id]||0)>0 || c.budget<300)
+    .sort((a,b)=>(spentMap[b.id]||0)-(spentMap[a.id]||0))
+    .slice(0,8);
+  prog.innerHTML = `<div class="card-title">Budget vs Actual</div>` +
+    highSpend.map(c=>{
+      const s = spentMap[c.id]||0;
+      const pct = c.budget>0 ? Math.min(100,(s/c.budget)*100) : 0;
+      const cls = pct>100?'over':pct>80?'warn':'ok';
+      return `<div class="prog-wrap">
+        <div class="prog-header">
+          <div class="prog-label">${c.name}</div>
+          <div class="prog-amounts">${fmt(s)} / ${fmt(c.budget)}</div>
+        </div>
+        <div class="prog-bar"><div class="prog-fill ${cls}" style="width:${pct}%;background:${c.color}"></div></div>
+      </div>`;
+    }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// SPENDING TAB
+// ════════════════════════════════════════════════════════════════
+let txFilter = 'All';
+function renderSpend() {
+  // Category filter pills
+  const groups = ['All',...new Set(state.budget.categories.map(c=>c.group))];
+  document.getElementById('cat-filter').innerHTML = groups.map(g=>
+    `<div class="cat-pill ${g===txFilter?'sel':''}" onclick="setTxFilter('${g}')">${g}</div>`
+  ).join('');
+
+  let txs = getMonthTx();
+  if (txFilter !== 'All') {
+    const catIds = state.budget.categories.filter(c=>c.group===txFilter).map(c=>c.id);
+    txs = txs.filter(tx=>catIds.includes(tx.catId));
+  }
+  txs = [...txs].sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+  const wrap = document.getElementById('tx-list-wrap');
+  if (txs.length===0) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">🧾</div><div class="empty-text">No transactions yet.<br>Tap + to add one.</div></div>`;
+    return;
+  }
+  wrap.innerHTML = `<div class="tx-list">`+txs.map(tx=>{
+    const cat = catById(tx.catId)||{name:'Unknown',color:'#ccc'};
+    const d = new Date(tx.date+'T12:00:00');
+    const dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    return `<div class="tx-item" onclick="editTx('${tx.id}')">
+      <div class="tx-dot" style="background:${cat.color}"></div>
+      <div class="tx-info">
+        <div class="tx-name">${tx.note||cat.name}</div>
+        <div class="tx-meta">${cat.name} · ${tx.who} · ${dateStr}</div>
+      </div>
+      <div class="tx-amt">${fmt(tx.amount)}</div>
+    </div>`;
+  }).join('')+`</div>`;
+}
+function setTxFilter(g) { txFilter=g; renderSpend(); }
+
+// ════════════════════════════════════════════════════════════════
+// GOALS TAB
+// ════════════════════════════════════════════════════════════════
+function renderGoals() {
+  const income = totalIncome();
+  document.getElementById('goals-wrap').innerHTML = `
+    <div class="card" style="margin-bottom:14px;background:var(--navy)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.5)">Monthly Savings Plan</div>
+          <div style="font-size:26px;font-weight:900;color:var(--gold);margin-top:4px">${fmt(state.goals.reduce((s,g)=>s+g.monthly,0))}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:rgba(255,255,255,.5);font-weight:600">of ${fmt(income)} income</div>
+          <div style="font-size:18px;font-weight:800;color:#4ade80;margin-top:2px">${((state.goals.reduce((s,g)=>s+g.monthly,0)/income)*100).toFixed(1)}%</div>
+        </div>
+      </div>
+    </div>
+    `+state.goals.map((goal,i)=>{
+      const pct = goal.target>0 ? Math.min(100,(goal.current/goal.target)*100) : null;
+      const monthsLeft = goal.target>0 && goal.monthly>0 ? Math.ceil((goal.target-goal.current)/goal.monthly) : null;
+      return `<div class="goal-card" onclick="openGoalModal(${i})">
+        <div class="goal-header">
+          <div class="goal-icon">${goal.icon}</div>
+          <div>
+            <div class="goal-title">${goal.name}</div>
+            <div class="goal-sub">Tap to update</div>
+          </div>
+        </div>
+        ${pct!==null ? `
+          <div class="prog-bar" style="height:10px;margin-bottom:8px">
+            <div class="prog-fill ok" style="width:${pct}%;background:${goal.color}"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:13px;color:var(--muted)">${fmt(goal.current)} saved</span>
+            <span style="font-size:13px;font-weight:700">${pct.toFixed(1)}% of ${fmt(goal.target)}</span>
+          </div>` : `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">Open-ended — building wealth 📈</div>`}
+        <div class="goal-stats">
+          <div class="goal-stat"><div class="goal-stat-val" style="color:${goal.color}">${fmt(goal.monthly)}</div><div class="goal-stat-lbl">Monthly</div></div>
+          <div class="goal-stat"><div class="goal-stat-val">${monthsLeft!==null?monthsLeft+'mo':'∞'}</div><div class="goal-stat-lbl">Months Left</div></div>
+          <div class="goal-stat"><div class="goal-stat-val" style="color:var(--green)">${fmt(goal.monthly*12)}</div><div class="goal-stat-lbl">Per Year</div></div>
+        </div>
+      </div>`;
+    }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// NET WORTH TAB
+// ════════════════════════════════════════════════════════════════
+function renderNW() {
+  const nw = state.netWorth;
+  const totalAssets = nw.assets.reduce((s,a)=>s+a.value,0);
+  const totalLiabs  = nw.liabilities.reduce((s,l)=>s+l.value,0);
+  const net = totalAssets - totalLiabs;
+
+  document.getElementById('nw-total').textContent = fmtS(net);
+  document.getElementById('nw-total').style.color = net>=0 ? 'var(--gold)' : 'var(--red)';
+
+  const aBox = document.getElementById('nw-assets-box');
+  aBox.innerHTML = `<div class="nw-box-title assets">Assets</div>`+
+    nw.assets.map(a=>`<div class="nw-row"><div class="nw-row-name">${a.name}</div><div class="nw-row-val pos">${fmt(a.value)}</div></div>`).join('')+
+    `<div class="nw-row"><div class="nw-row-name">Total</div><div class="nw-row-val pos">${fmt(totalAssets)}</div></div>`;
+
+  const lBox = document.getElementById('nw-liabs-box');
+  lBox.innerHTML = `<div class="nw-box-title liabs">Liabilities</div>`+
+    nw.liabilities.map(l=>`<div class="nw-row"><div class="nw-row-name">${l.name}</div><div class="nw-row-val neg">${fmt(l.value)}</div></div>`).join('')+
+    `<div class="nw-row"><div class="nw-row-name">Total</div><div class="nw-row-val neg">${fmt(totalLiabs)}</div></div>`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// BUDGET TAB
+// ════════════════════════════════════════════════════════════════
+function renderBudget() {
+  document.getElementById('inc-chris-disp').textContent = fmt(state.budget.income.chris);
+  document.getElementById('inc-rose-disp').textContent  = fmt(state.budget.income.rose);
+
+  const groups = [...new Set(state.budget.categories.map(c=>c.group))];
+  document.getElementById('budget-list-wrap').innerHTML = groups.map(g=>{
+    const cats = state.budget.categories.filter(c=>c.group===g);
+    const total = cats.reduce((s,c)=>s+c.budget,0);
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="card-title">${g}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--muted)">${fmt(total)}/mo</div>
+      </div>
+      ${cats.map(c=>`
+        <div class="edit-row">
+          <div class="budget-dot" style="background:${c.color}"></div>
+          <div class="edit-name">${c.name}<br><span style="font-size:11px;color:var(--muted)">${c.owner}</span></div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-size:13px;color:var(--muted)">$</span>
+            <input class="edit-input" type="number" data-cat="${c.id}" value="${c.budget}" inputmode="decimal" step="0.01">
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }).join('') + `
+    <div class="card" style="background:var(--navy)">
+      <div style="display:flex;justify-content:space-between">
+        <div style="color:rgba(255,255,255,.6);font-size:13px;font-weight:700">TOTAL BUDGET</div>
+        <div style="color:var(--gold);font-size:16px;font-weight:900">${fmt(totalBudget())}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        <div style="color:rgba(255,255,255,.6);font-size:13px;font-weight:700">TOTAL INCOME</div>
+        <div style="color:#4ade80;font-size:16px;font-weight:900">${fmt(totalIncome())}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        <div style="color:rgba(255,255,255,.6);font-size:13px;font-weight:700">SAVINGS HEADROOM</div>
+        <div style="font-size:16px;font-weight:900;color:${totalIncome()-totalBudget()>=0?'#a3e635':'#f87171'}">${fmtS(totalIncome()-totalBudget())}</div>
+      </div>
+    </div>
+    <div style="height:20px"></div>
+  `;
+}
+
+function saveBudgetEdits() {
+  document.querySelectorAll('.edit-input[data-cat]').forEach(inp=>{
+    const cat = state.budget.categories.find(c=>c.id===inp.dataset.cat);
+    if (cat) cat.budget = parseFloat(inp.value)||0;
+  });
+  save(); renderBudget(); toast('Budget saved ✓');
+}
+
+// ════════════════════════════════════════════════════════════════
+// TRANSACTION MODAL
+// ════════════════════════════════════════════════════════════════
+let txWho = 'Chris';
+let editingTxId = null;
+
+function openAddTx() {
+  editingTxId = null;
+  document.getElementById('tx-modal-title').textContent = 'Add Transaction';
+  document.getElementById('tx-amt').value = '';
+  document.getElementById('tx-note').value = '';
+  document.getElementById('tx-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('tx-save-btn').textContent = 'Add Transaction';
+  document.getElementById('tx-del-btn').style.display = 'none';
+  txWho = 'Chris';
+  document.querySelectorAll('.who-btn').forEach(b=>{
+    b.classList.toggle('sel', b.textContent==='Chris');
+  });
+  populateCatSelect(null);
+  document.getElementById('tx-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('tx-amt').focus(),300);
+}
+
+function editTx(id) {
+  const tx = getMonthTx().find(t=>t.id===id);
+  if (!tx) return;
+  editingTxId = id;
+  document.getElementById('tx-modal-title').textContent = 'Edit Transaction';
+  document.getElementById('tx-amt').value = tx.amount;
+  document.getElementById('tx-note').value = tx.note||'';
+  document.getElementById('tx-date').value = tx.date;
+  document.getElementById('tx-save-btn').textContent = 'Save Changes';
+  document.getElementById('tx-del-btn').style.display = 'block';
+  txWho = tx.who;
+  document.querySelectorAll('.who-btn').forEach(b=>{
+    b.classList.toggle('sel', b.textContent===tx.who);
+  });
+  populateCatSelect(tx.catId);
+  document.getElementById('tx-modal').classList.add('open');
+}
+
+function populateCatSelect(selectedId) {
+  const sel = document.getElementById('tx-cat');
+  const groups = [...new Set(state.budget.categories.map(c=>c.group))];
+  sel.innerHTML = groups.map(g=>{
+    const cats = state.budget.categories.filter(c=>c.group===g);
+    return `<optgroup label="${g}">`+cats.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.name}</option>`).join('')+`</optgroup>`;
+  }).join('');
+}
+
+function closeTxModal() { document.getElementById('tx-modal').classList.remove('open'); }
+
+function setWho(who, btn) {
+  txWho = who;
+  document.querySelectorAll('.who-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+
+function saveTx() {
+  const amt = parseFloat(document.getElementById('tx-amt').value);
+  if (!amt || amt<=0) { toast('Enter a valid amount'); return; }
+  const catId = document.getElementById('tx-cat').value;
+  const note  = document.getElementById('tx-note').value.trim();
+  const date  = document.getElementById('tx-date').value;
+  const key   = date.slice(0,7);
+
+  if (!state.transactions[key]) state.transactions[key] = [];
+
+  if (editingTxId) {
+    const mk = monthKey();
+    const txs = state.transactions[mk]||[];
+    const idx = txs.findIndex(t=>t.id===editingTxId);
+    if (idx>=0) txs[idx] = {...txs[idx], amount:amt, catId, note, date, who:txWho};
+    state.transactions[mk] = txs;
+    toast('Transaction updated ✓');
+  } else {
+    state.transactions[key].push({
+      id: Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+      amount:amt, catId, note, date, who:txWho
+    });
+    toast('Added ✓');
+  }
+  save(); closeTxModal(); renderTab(currentTab);
+}
+
+function deleteTx() {
+  if (!editingTxId) return;
+  if (!confirm('Delete this transaction?')) return;
+  const mk = monthKey();
+  state.transactions[mk] = (state.transactions[mk]||[]).filter(t=>t.id!==editingTxId);
+  save(); closeTxModal(); renderTab(currentTab); toast('Deleted');
+}
+
+// ════════════════════════════════════════════════════════════════
+// GOALS MODAL
+// ════════════════════════════════════════════════════════════════
+let editingGoalIdx = null;
+function openGoalModal(i) {
+  editingGoalIdx = i;
+  const g = state.goals[i];
+  document.getElementById('goal-modal-title').textContent = 'Update: '+g.name;
+  document.getElementById('goal-balance').value = g.current;
+  document.getElementById('goal-monthly').value = g.monthly;
+  document.getElementById('goal-target').value  = g.target||0;
+  document.getElementById('goal-modal').classList.add('open');
+}
+function closeGoalModal() { document.getElementById('goal-modal').classList.remove('open'); }
+function saveGoal() {
+  const g = state.goals[editingGoalIdx];
+  g.current = parseFloat(document.getElementById('goal-balance').value)||0;
+  g.monthly  = parseFloat(document.getElementById('goal-monthly').value)||0;
+  g.target   = parseFloat(document.getElementById('goal-target').value)||0;
+  save(); closeGoalModal(); renderGoals(); toast('Goal updated ✓');
+}
+
+// ════════════════════════════════════════════════════════════════
+// NET WORTH MODAL
+// ════════════════════════════════════════════════════════════════
+function openNWModal() {
+  const nw = state.netWorth;
+  document.getElementById('nw-edit-wrap').innerHTML =
+    `<div class="section-divider">Assets</div>`+
+    nw.assets.map((a,i)=>`
+      <div class="edit-row">
+        <div class="edit-name">${a.name}<br><span style="font-size:11px;color:var(--muted)">${a.type}</span></div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:13px;color:var(--muted)">$</span>
+          <input class="edit-input" type="number" data-asset="${i}" value="${a.value}" inputmode="decimal">
+        </div>
+      </div>`).join('')+
+    `<div class="section-divider" style="margin-top:16px">Liabilities</div>`+
+    nw.liabilities.map((l,i)=>`
+      <div class="edit-row">
+        <div class="edit-name">${l.name}<br><span style="font-size:11px;color:var(--muted)">${l.type}</span></div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:13px;color:var(--muted)">$</span>
+          <input class="edit-input" type="number" data-liab="${i}" value="${l.value}" inputmode="decimal">
+        </div>
+      </div>`).join('');
+  document.getElementById('nw-modal').classList.add('open');
+}
+function closeNWModal() { document.getElementById('nw-modal').classList.remove('open'); }
+function saveNW() {
+  document.querySelectorAll('[data-asset]').forEach(inp=>{
+    state.netWorth.assets[+inp.dataset.asset].value = parseFloat(inp.value)||0;
+  });
+  document.querySelectorAll('[data-liab]').forEach(inp=>{
+    state.netWorth.liabilities[+inp.dataset.liab].value = parseFloat(inp.value)||0;
+  });
+  save(); closeNWModal(); renderNW(); toast('Net worth updated ✓');
+}
+
+// ════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════
+
+// Register service worker for PWA offline support
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    const CACHE = 'ernest-budget-v1';
+    const URLS = [location.href];
+    self.addEventListener('install', e => {
+      e.waitUntil(caches.open(CACHE).then(c => c.addAll(URLS)));
+      self.skipWaiting();
+    });
+    self.addEventListener('fetch', e => {
+      e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+    });
+  `;
+  const blob = new Blob([swCode], {type:'text/javascript'});
+  const swUrl = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl).catch(()=>{});
+}
+
+// PWA manifest injection
+const manifest = {
+  name:'Bernard Household Budget', short_name:'Bernard Budget',
+  start_url:'.', display:'standalone', background_color:'#0f172a',
+  theme_color:'#0f172a', description:'Ernest & Rose household budget tracker',
+  icons:[{src:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="%230f172a"/><text y=".9em" x="50%" text-anchor="middle" font-size="70">💰</text></svg>',sizes:'192x192',type:'image/svg+xml'}]
+};
+const mlink = document.createElement('link');
+mlink.rel='manifest';
+mlink.href='data:application/json,'+encodeURIComponent(JSON.stringify(manifest));
+document.head.appendChild(mlink);
+
+load();
+updateMonthLabel();
+renderDash();
+</script>
+</body>
+</html>
