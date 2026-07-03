@@ -9,6 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Ernest Budget">
 <title>Ernest Household Budget</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <style>
   :root {
     --navy:#0f172a; --navy2:#1e293b; --gold:#d4af37; --gold2:#f0cc5a;
@@ -41,16 +43,16 @@
 
   /* Cards */
   .card{background:var(--card);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-  .card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
+  .card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:14px}
 
   /* Summary row cards */
-  .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
   .stat-card{background:var(--card);border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-  .stat-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px}
-  .stat-value{font-size:22px;font-weight:800;letter-spacing:-.5px}
+  .stat-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:6px}
+  .stat-value{font-size:24px;font-weight:800;letter-spacing:-.5px}
   .stat-value.green{color:var(--green)} .stat-value.red{color:var(--red)}
   .stat-value.blue{color:var(--blue)} .stat-value.gold{color:var(--gold)}
-  .stat-sub{font-size:11px;color:var(--muted);margin-top:2px}
+  .stat-sub{font-size:11px;color:var(--muted);margin-top:4px}
 
   /* Progress bars */
   .prog-wrap{margin-bottom:12px}
@@ -155,18 +157,107 @@
 
   /* Settings button */
   .icon-btn{background:none;border:none;font-size:20px;cursor:pointer;padding:4px;opacity:.7}
+
+  /* Privacy mode */
+  .privacy-mode .stat-value,
+  .privacy-mode .nw-total-val,
+  .privacy-mode .nw-row-val,
+  .privacy-mode .goal-stat-val,
+  .privacy-mode .tx-amt,
+  .privacy-mode #inc-chris-disp,
+  .privacy-mode #inc-rose-disp,
+  .privacy-mode .bva-num,
+  .privacy-mode .sensitive { filter:blur(8px) !important; user-select:none; transition:filter .25s }
+  #privacy-btn.priv-on { opacity:1 }
+  /* Privacy PIN overlay */
+  #pin-overlay{position:fixed;inset:0;background:rgba(15,23,42,.92);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px)}
+  #pin-overlay.open{display:flex}
+  .pin-box{background:var(--card);border-radius:20px;padding:28px 24px;width:88%;max-width:320px;text-align:center}
+  .pin-icon{font-size:36px;margin-bottom:8px}
+  .pin-title{font-size:17px;font-weight:800;margin-bottom:4px}
+  .pin-sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+  .pin-input{width:100%;padding:14px;border:1.5px solid var(--border);border-radius:12px;font-size:22px;text-align:center;letter-spacing:8px;outline:none;background:var(--bg);color:var(--text)}
+  .pin-input:focus{border-color:var(--gold)}
+  .pin-error{color:var(--red);font-size:12px;min-height:16px;margin-top:6px}
+  .pin-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+  .pin-cancel{padding:13px;border:1.5px solid var(--border);background:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;color:var(--muted)}
+  .pin-unlock{padding:13px;background:var(--navy);color:var(--white);border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer}
+
+  /* UI: more breathing room */
+  .card { padding:20px; margin-bottom:16px }
+  .stat-card { padding:18px }
+  .tx-item { padding:14px 16px }
+  .goal-card { padding:20px; margin-bottom:14px }
+  .nw-box { padding:18px }
+  .prog-wrap { margin-bottom:16px }
+  .prog-bar { height:9px }
+</style>
+<style>
+  #login-screen{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:32px}
+  #login-screen.hidden{display:none}
+  .login-logo{font-size:48px;margin-bottom:8px}
+  .login-title{color:var(--gold);font-size:26px;font-weight:800;margin-bottom:4px;letter-spacing:-.5px}
+  .login-sub{color:rgba(255,255,255,.45);font-size:13px;margin-bottom:40px}
+  .login-box{width:100%;max-width:320px;display:flex;flex-direction:column;gap:12px}
+  .login-input{background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.12);border-radius:12px;padding:14px 16px;color:#fff;font-size:16px;outline:none;width:100%;transition:border-color .2s}
+  .login-input:focus{border-color:var(--gold)}
+  .login-input::placeholder{color:rgba(255,255,255,.3)}
+  .login-btn{background:var(--gold);color:var(--navy);font-size:16px;font-weight:700;border:none;border-radius:12px;padding:15px;cursor:pointer;transition:opacity .15s}
+  .login-btn:active{opacity:.8}
+  .login-error{color:#f87171;font-size:13px;text-align:center;min-height:18px}
 </style>
 </head>
 <body>
+
+<!-- Login Screen -->
+<div id="login-screen">
+  <div class="login-logo">🏠</div>
+  <div class="login-title">Ernest Budget</div>
+  <div class="login-sub">Family Finance Dashboard</div>
+  <div class="login-box">
+    <input class="login-input" type="password" id="login-password" placeholder="Enter password" autocomplete="current-password">
+    <button class="login-btn" onclick="checkLogin()">Sign In</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<script>
+  const PW_HASH = '130776767a6ef130e5c5b3baebe5daba0eaf181e98c829856ce3cc3c913494a9';
+  async function hashPw(pw) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+  (function(){
+    if(localStorage.getItem('eb_auth')==='true'){
+      document.getElementById('login-screen').classList.add('hidden');
+    }
+    document.getElementById('login-password').addEventListener('keydown',function(e){
+      if(e.key==='Enter') checkLogin();
+    });
+  })();
+  async function checkLogin(){
+    const pw = document.getElementById('login-password').value;
+    const hash = await hashPw(pw);
+    if(hash === PW_HASH){
+      localStorage.setItem('eb_auth','true');
+      document.getElementById('login-screen').classList.add('hidden');
+    } else {
+      document.getElementById('login-error').textContent='Incorrect password. Try again.';
+      document.getElementById('login-password').value='';
+      document.getElementById('login-password').focus();
+    }
+  }
+</script>
+
 <div id="app">
   <div id="topbar">
-    <div style="font-size:20px">💰</div>
+    <div class="topbar-title">Ernest</div>
     <div class="month-nav">
       <button onclick="changeMonth(-1)">‹</button>
       <div id="month-label"></div>
       <button onclick="changeMonth(1)">›</button>
     </div>
-    <div class="topbar-title">Ernest</div>
+    <button class="icon-btn" id="privacy-btn" onclick="togglePrivacy()" title="Privacy mode" style="color:rgba(255,255,255,.6);font-size:18px">👁️</button>
   </div>
 
   <!-- DASHBOARD -->
@@ -214,7 +305,10 @@
     <div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="font-size:16px;font-weight:800">Monthly Budget</div>
-        <button class="btn-primary" style="width:auto;padding:8px 14px;font-size:13px;margin:0" onclick="saveBudgetEdits()">Save</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;background:var(--navy2)" onclick="openCatModal()">+ Category</button>
+          <button class="btn-primary" style="width:auto;padding:8px 14px;font-size:13px;margin:0" onclick="saveBudgetEdits()">Save</button>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--bg);border-radius:12px;padding:12px">
         <div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Chris Income</div><div style="font-size:18px;font-weight:800;color:var(--blue)" id="inc-chris-disp">$7,452</div></div>
@@ -233,6 +327,21 @@
   </nav>
 </div>
 
+<!-- Privacy PIN Overlay -->
+<div id="pin-overlay">
+  <div class="pin-box">
+    <div class="pin-icon">🔒</div>
+    <div class="pin-title">Enter PIN to reveal</div>
+    <div class="pin-sub">Numbers are hidden for privacy</div>
+    <input class="pin-input" type="password" inputmode="numeric" id="pin-input" maxlength="4" placeholder="••••" onkeydown="if(event.key==='Enter')checkPin()">
+    <div class="pin-error" id="pin-error"></div>
+    <div class="pin-btns">
+      <button class="pin-cancel" onclick="closePinOverlay()">Cancel</button>
+      <button class="pin-unlock" onclick="checkPin()">Unlock</button>
+    </div>
+  </div>
+</div>
+
 <button id="fab" onclick="openAddTx()">+</button>
 <div id="toast"></div>
 
@@ -243,7 +352,10 @@
     <div class="modal-title" id="tx-modal-title">Add Transaction</div>
     <label>Amount ($)</label>
     <input type="number" id="tx-amt" inputmode="decimal" placeholder="0.00" step="0.01">
-    <label>Category</label>
+    <label style="display:flex;justify-content:space-between;align-items:center">
+      Category
+      <button type="button" onclick="openCatFromTx()" style="font-size:11px;background:none;border:none;color:var(--blue);font-weight:700;cursor:pointer;padding:0;text-decoration:none;letter-spacing:0;text-transform:none">+ New</button>
+    </label>
     <select id="tx-cat"></select>
     <label>Note (optional)</label>
     <input type="text" id="tx-note" placeholder="What was it for?">
@@ -257,6 +369,31 @@
     </div>
     <button class="btn-primary" onclick="saveTx()" id="tx-save-btn">Add Transaction</button>
     <button class="btn-primary btn-danger" id="tx-del-btn" onclick="deleteTx()" style="margin-top:8px;display:none">Delete</button>
+  </div>
+</div>
+
+<!-- ADD CATEGORY MODAL -->
+<div class="modal-bg" id="cat-modal" onclick="if(event.target===this)closeCatModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add Category</div>
+    <label>Category Name</label>
+    <input type="text" id="cat-name" placeholder="e.g. Gym, Haircut, Netflix">
+    <label>Monthly Budget ($) — enter 0 if variable</label>
+    <input type="number" id="cat-budget" inputmode="decimal" placeholder="0.00" step="0.01">
+    <label>Group</label>
+    <select id="cat-group"></select>
+    <div style="margin-top:6px;display:flex;gap:8px;align-items:center">
+      <span style="font-size:13px;color:var(--muted)">or create new group:</span>
+      <input type="text" id="cat-newgroup" placeholder="New group name" style="flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border);font-size:14px">
+    </div>
+    <label style="margin-top:12px">Who?</label>
+    <div class="who-btns">
+      <button class="who-btn sel" onclick="setCatWho('Chris',this)">Chris</button>
+      <button class="who-btn" onclick="setCatWho('Rose',this)">Rose</button>
+      <button class="who-btn" onclick="setCatWho('Both',this)">Both</button>
+    </div>
+    <button class="btn-primary" onclick="saveNewCat()" style="margin-top:16px">Add Category</button>
   </div>
 </div>
 
@@ -287,6 +424,20 @@
 
 <script>
 // ════════════════════════════════════════════════════════════════
+// FIREBASE
+// ════════════════════════════════════════════════════════════════
+firebase.initializeApp({
+  apiKey: "AIzaSyAj-TJwZe5NeZMn7VwNQ4cbH-kDkGJfDnk",
+  authDomain: "ernest-budget.firebaseapp.com",
+  projectId: "ernest-budget",
+  storageBucket: "ernest-budget.firebasestorage.app",
+  messagingSenderId: "290300302615",
+  appId: "1:290300302615:web:33483b628f38498e509352"
+});
+const db = firebase.firestore();
+const DOC = db.collection('budgets').doc('ernest');
+
+// ════════════════════════════════════════════════════════════════
 // DATA MODEL
 // ════════════════════════════════════════════════════════════════
 const DEFAULT_BUDGET = {
@@ -300,8 +451,8 @@ const DEFAULT_BUDGET = {
     {id:'internet',name:'Internet',budget:49.99,group:'Housing',owner:'Both',color:'#84cc16'},
     // Personal
     {id:'student_loans',name:'Student Loans',budget:195,group:'Personal',owner:'Chris',color:'#22c55e'},
-    {id:'car_ins',name:'Car Insurance',budget:310,group:'Personal',owner:'Chris',color:'#10b981'},
-    {id:'parking',name:'Parking',budget:225,group:'Personal',owner:'Chris',color:'#14b8a6'},
+    {id:'car_ins',name:'Car Insurance',budget:335,group:'Personal',owner:'Chris',color:'#10b981'},
+    {id:'parking',name:'Parking',budget:255,group:'Personal',owner:'Chris',color:'#14b8a6'},
     {id:'life_ins',name:'Life Insurance',budget:67,group:'Personal',owner:'Both',color:'#06b6d4'},
     // Subscriptions
     {id:'chatgpt',name:'ChatGPT',budget:21.24,group:'Subscriptions',owner:'Chris',color:'#3b82f6'},
@@ -326,10 +477,14 @@ const DEFAULT_BUDGET = {
     {id:'shopping',name:'Shopping',budget:300,group:'Living',owner:'Both',color:'#06b6d4'},
     {id:'gym',name:'Gym',budget:70,group:'Living',owner:'Both',color:'#3b82f6'},
     {id:'cleaners',name:'Cleaners',budget:100,group:'Living',owner:'Both',color:'#8b5cf6'},
+    {id:'beauty',name:'Beauty / Personal',budget:0,group:'Living',owner:'Both',color:'#ec4899'},
+    {id:'entertainment',name:'Entertainment',budget:0,group:'Living',owner:'Both',color:'#f59e0b'},
+    {id:'travel',name:'Travel / Hotel',budget:0,group:'Living',owner:'Both',color:'#0ea5e9'},
     {id:'ezpass',name:'EZPass',budget:75,group:'Transport',owner:'Chris',color:'#f97316'},
     {id:'gas',name:'Gas',budget:60,group:'Transport',owner:'Chris',color:'#ef4444'},
     {id:'train',name:'Train',budget:25,group:'Transport',owner:'Both',color:'#6366f1'},
-    {id:'uber',name:'Uber',budget:100,group:'Transport',owner:'Both',color:'#1d1d1f'},
+    {id:'uber',name:'Uber / Lyft',budget:100,group:'Transport',owner:'Both',color:'#1d1d1f'},
+    {id:'auto_services',name:'Auto Services',budget:0,group:'Transport',owner:'Chris',color:'#dc2626'},
   ],
   goals: [
     {id:'emergency',name:'Emergency Fund',icon:'🛡️',target:66000,current:89000,monthly:0,color:'#22c55e'},
@@ -360,32 +515,232 @@ const DEFAULT_BUDGET = {
 };
 
 // ════════════════════════════════════════════════════════════════
+// JUNE 2026 SEED DATA
+// ════════════════════════════════════════════════════════════════
+const JUNE_SEED = [
+  // Housing (fixed)
+  {id:'s001',catId:'mortgage',amount:6007.00,note:'Mortgage + Property Tax',date:'2026-06-01',who:'Both'},
+  {id:'s002',catId:'hoa',amount:678.00,note:'HOA',date:'2026-06-01',who:'Both'},
+  {id:'s003',catId:'home_ins',amount:47.00,note:'Home Insurance',date:'2026-06-01',who:'Both'},
+  {id:'s004',catId:'electric',amount:150.00,note:'Electric Bill',date:'2026-06-01',who:'Both'},
+  {id:'s005',catId:'internet',amount:49.99,note:'Internet',date:'2026-06-01',who:'Both'},
+  // Personal / Debt
+  {id:'s006',catId:'student_loans',amount:195.00,note:'Student Loans',date:'2026-06-01',who:'Chris'},
+  {id:'s007',catId:'car_ins',amount:335.21,note:'GEICO Auto Insurance',date:'2026-06-27',who:'Chris'},
+  {id:'s008',catId:'parking',amount:255.00,note:'LAZ Parking (Monthly)',date:'2026-06-01',who:'Chris'},
+  {id:'s009',catId:'life_ins',amount:67.00,note:'Life Insurance',date:'2026-06-01',who:'Both'},
+  // Subscriptions
+  {id:'s010',catId:'chatgpt',amount:21.24,note:'ChatGPT',date:'2026-06-15',who:'Chris'},
+  {id:'s011',catId:'hulu',amount:6.98,note:'Hulu (net of Plat credit)',date:'2026-06-19',who:'Chris'},
+  {id:'s012',catId:'spotify',amount:12.99,note:'Spotify',date:'2026-06-24',who:'Chris'},
+  {id:'s013',catId:'xbox',amount:24.43,note:'Xbox Game Pass',date:'2026-06-17',who:'Chris'},
+  {id:'s014',catId:'briteco',amount:25.95,note:'Briteco Jewelry Insurance',date:'2026-06-24',who:'Both'},
+  // Pet
+  {id:'s015',catId:'grooming',amount:127.95,note:'Glamour Pet Salon (Louie)',date:'2026-06-25',who:'Rose'},
+  {id:'s016',catId:'grooming',amount:40.08,note:'Mr & Mrs Bubbles (Louie)',date:'2026-06-19',who:'Chris'},
+  // Groceries
+  {id:'s017',catId:'groceries',amount:122.62,note:'Instacart / Costco',date:'2026-06-19',who:'Chris'},
+  {id:'s018',catId:'groceries',amount:72.58,note:'Instacart',date:'2026-06-16',who:'Chris'},
+  {id:'s019',catId:'groceries',amount:213.51,note:'CookUnity Meal Kits (Rose)',date:'2026-06-24',who:'Rose'},
+  {id:'s020',catId:'groceries',amount:29.44,note:'Wegmans',date:'2026-06-12',who:'Chris'},
+  {id:'s021',catId:'groceries',amount:27.86,note:'Scale Fish Market',date:'2026-06-16',who:'Chris'},
+  {id:'s022',catId:'groceries',amount:27.55,note:'ShopRite',date:'2026-06-01',who:'Both'},
+  {id:'s023',catId:'groceries',amount:27.96,note:'ACME',date:'2026-06-04',who:'Chris'},
+  {id:'s024',catId:'groceries',amount:18.19,note:'Lidl',date:'2026-06-20',who:'Chris'},
+  {id:'s025',catId:'groceries',amount:11.99,note:'Whole Foods',date:'2026-06-16',who:'Chris'},
+  {id:'s026',catId:'groceries',amount:3.31,note:'Metro Market',date:'2026-06-28',who:'Chris'},
+  // Dining Out
+  {id:'s027',catId:'eating_out',amount:95.97,note:'Domodomo JC',date:'2026-06-25',who:'Chris'},
+  {id:'s028',catId:'eating_out',amount:189.39,note:'KPOT Korean BBQ (Rose)',date:'2026-06-22',who:'Rose'},
+  {id:'s029',catId:'eating_out',amount:72.77,note:"Basile's Pizza Hoboken",date:'2026-06-20',who:'Chris'},
+  {id:'s030',catId:'eating_out',amount:67.32,note:'Masala King NYC',date:'2026-06-27',who:'Chris'},
+  {id:'s031',catId:'eating_out',amount:54.44,note:'Lims Fine Thai (Rose)',date:'2026-06-13',who:'Rose'},
+  {id:'s032',catId:'eating_out',amount:46.33,note:'East Hana JC',date:'2026-06-26',who:'Chris'},
+  {id:'s033',catId:'eating_out',amount:43.17,note:'New Mikado (Rose)',date:'2026-06-22',who:'Rose'},
+  {id:'s034',catId:'eating_out',amount:34.30,note:'Kung Fu Pho',date:'2026-06-18',who:'Chris'},
+  {id:'s035',catId:'eating_out',amount:33.17,note:'Uber Eats (Rose)',date:'2026-06-11',who:'Rose'},
+  {id:'s036',catId:'eating_out',amount:30.77,note:'BobwhiteCounter SF (Rose)',date:'2026-06-18',who:'Rose'},
+  {id:'s037',catId:'eating_out',amount:20.50,note:'Umami Sushi NYC',date:'2026-06-27',who:'Chris'},
+  {id:'s038',catId:'eating_out',amount:20.70,note:"McDonald's",date:'2026-06-14',who:'Chris'},
+  {id:'s039',catId:'eating_out',amount:20.01,note:'Bar / Code NYC',date:'2026-06-28',who:'Chris'},
+  {id:'s040',catId:'eating_out',amount:18.18,note:'Wurstbar JC',date:'2026-06-16',who:'Chris'},
+  {id:'s041',catId:'eating_out',amount:15.87,note:'Little Sandwich Shop JC',date:'2026-06-02',who:'Chris'},
+  {id:'s042',catId:'eating_out',amount:63.91,note:'Life Pancake House JC',date:'2026-06-03',who:'Chris'},
+  {id:'s043',catId:'eating_out',amount:7.46,note:'Molly Tea (bubble tea)',date:'2026-06-28',who:'Chris'},
+  {id:'s044',catId:'eating_out',amount:44.15+2.35+1.00,note:'Uber Eats (Chris)',date:'2026-06-29',who:'Chris'},
+  {id:'s045',catId:'eating_out',amount:28.00,note:"Granny Boo's Kitchen",date:'2026-06-12',who:'Chris'},
+  {id:'s046',catId:'eating_out',amount:6.07,note:'Dunkin (Rose)',date:'2026-06-18',who:'Rose'},
+  // New Orleans dining
+  {id:'s047',catId:'eating_out',amount:113.57,note:"Willie Mae's NOLA",date:'2026-06-08',who:'Chris'},
+  {id:'s048',catId:'eating_out',amount:121.58,note:"Neyow's Creole Cafe NOLA",date:'2026-06-07',who:'Chris'},
+  {id:'s049',catId:'eating_out',amount:90.11,note:'Monday Restaurant NOLA',date:'2026-06-07',who:'Chris'},
+  {id:'s050',catId:'eating_out',amount:50.62,note:"Loretta's Authentic NOLA",date:'2026-06-11',who:'Chris'},
+  {id:'s051',catId:'eating_out',amount:50.19,note:'Thai Nola',date:'2026-06-09',who:'Chris'},
+  {id:'s052',catId:'eating_out',amount:29.00,note:"Pat O'Brien's NOLA",date:'2026-06-06',who:'Chris'},
+  {id:'s053',catId:'eating_out',amount:22.73,note:'Hotel Monteleone Bar',date:'2026-06-09',who:'Chris'},
+  {id:'s054',catId:'eating_out',amount:19.53,note:'Cafe Negril NOLA',date:'2026-06-07',who:'Chris'},
+  {id:'s055',catId:'eating_out',amount:17.76,note:'Killer Poboys NOLA',date:'2026-06-06',who:'Chris'},
+  {id:'s056',catId:'eating_out',amount:13.80,note:'Cafe Beignet (Rose)',date:'2026-06-08',who:'Rose'},
+  {id:'s057',catId:'eating_out',amount:12.02,note:'St. Noir NOLA',date:'2026-06-09',who:'Chris'},
+  {id:'s058',catId:'eating_out',amount:11.16,note:"Gus's World Famous NOLA",date:'2026-06-08',who:'Chris'},
+  {id:'s059',catId:'eating_out',amount:10.44,note:'Nola Scoops',date:'2026-06-06',who:'Chris'},
+  {id:'s060',catId:'eating_out',amount:54.00,note:"Ogie's Trailer Park (RI)",date:'2026-06-12',who:'Chris'},
+  // Shopping (excl wedding)
+  {id:'s061',catId:'shopping',amount:91.16,note:'Etsy (Rose)',date:'2026-06-26',who:'Rose'},
+  {id:'s062',catId:'shopping',amount:143.93,note:'Key2Lock (locksmith)',date:'2026-06-20',who:'Chris'},
+  {id:'s063',catId:'shopping',amount:71.91,note:'Amazon',date:'2026-06-28',who:'Rose'},
+  {id:'s064',catId:'shopping',amount:1.92,note:'Walmart.com',date:'2026-06-03',who:'Both'},
+  {id:'s065',catId:'shopping',amount:36.00,note:'Squarespace (website)',date:'2026-06-09',who:'Chris'},
+  // Cleaners
+  {id:'s066',catId:'cleaners',amount:21.44,note:'Mr & Mrs Bubbles (clothes)',date:'2026-06-27',who:'Chris'},
+  // Transport
+  {id:'s067',catId:'ezpass',amount:125.00,note:'EZ Pass (5x $25)',date:'2026-06-20',who:'Chris'},
+  {id:'s068',catId:'gas',amount:69.24,note:'Costco Gas',date:'2026-06-20',who:'Chris'},
+  {id:'s069',catId:'gas',amount:66.62,note:'Costco Gas',date:'2026-06-12',who:'Chris'},
+  {id:'s070',catId:'gas',amount:40.00,note:'Sunoco',date:'2026-06-27',who:'Chris'},
+  {id:'s071',catId:'gas',amount:20.76,note:'Exxon (RI trip)',date:'2026-06-12',who:'Chris'},
+  {id:'s072',catId:'gas',amount:20.27,note:'Shell (RI trip)',date:'2026-06-12',who:'Chris'},
+  {id:'s073',catId:'train',amount:9.75,note:'PATH Train (3x)',date:'2026-06-27',who:'Chris'},
+  {id:'s074',catId:'train',amount:6.00,note:'NYC Subway',date:'2026-06-27',who:'Chris'},
+  {id:'s075',catId:'uber',amount:132.19,note:'Lyft (multiple rides)',date:'2026-06-07',who:'Chris'},
+  {id:'s076',catId:'uber',amount:42.75,note:'Uber (New Orleans)',date:'2026-06-11',who:'Chris'},
+  {id:'s077',catId:'uber',amount:48.47,note:'Lyft (4 rides)',date:'2026-06-21',who:'Chris'},
+  {id:'s078',catId:'uber',amount:33.91,note:'Lyft (Boston)',date:'2026-06-15',who:'Chris'},
+  {id:'s079',catId:'uber',amount:14.18,note:'Uber',date:'2026-06-08',who:'Chris'},
+  {id:'s080',catId:'uber',amount:11.68,note:'Lyft',date:'2026-06-02',who:'Chris'},
+  // Auto Services
+  {id:'s081',catId:'auto_services',amount:333.84,note:'G&T Auto Imports (repair)',date:'2026-06-19',who:'Chris'},
+  {id:'s082',catId:'auto_services',amount:5.08,note:'Hoboken Car Wash',date:'2026-06-04',who:'Chris'},
+  // Travel
+  {id:'s083',catId:'travel',amount:795.72,note:'Waldorf Roosevelt NOLA (net of $300 credit)',date:'2026-06-09',who:'Chris'},
+  // Entertainment
+  {id:'s084',catId:'entertainment',amount:233.98,note:'World Cup Boston (tickets)',date:'2026-06-13',who:'Chris'},
+  {id:'s085',catId:'entertainment',amount:58.85,note:'Boston Stadium (tickets)',date:'2026-06-13',who:'Chris'},
+  {id:'s086',catId:'entertainment',amount:22.00,note:'Anyelas Vineyards (Rose)',date:'2026-06-20',who:'Rose'},
+  {id:'s087',catId:'entertainment',amount:6.36,note:'PlayStation',date:'2026-06-21',who:'Chris'},
+  // Beauty
+  {id:'s088',catId:'beauty',amount:74.63,note:'Sally Beauty',date:'2026-06-05',who:'Rose'},
+  // Insurance
+  {id:'s089',catId:'car_ins',amount:25.95,note:'Briteco (jewelry ins) — already in briteco sub',date:'2026-06-24',who:'Both'},
+];
+
+function seedJuneData() {
+  const key = '2026-06';
+  if (!state.transactions[key] || !state.transactions[key].find(t=>t.id==='s001')) {
+    state.transactions[key] = [...(state.transactions[key]||[]).filter(t=>!t.id||!t.id.startsWith('s')), ...JUNE_SEED];
+    // Don't call save() here — load() will push to Firebase after seeding
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════════
 let state = {
   currentMonth: new Date().getMonth(),
   currentYear: new Date().getFullYear(),
-  budget: null,
-  transactions: {},  // { "YYYY-MM": [{id,catId,amount,note,date,who}] }
-  goals: null,
-  netWorth: null,
+  budget: JSON.parse(JSON.stringify(DEFAULT_BUDGET)),
+  transactions: {},
+  goals: JSON.parse(JSON.stringify(DEFAULT_BUDGET.goals)),
+  netWorth: JSON.parse(JSON.stringify(DEFAULT_BUDGET.netWorth)),
 };
 
-function load() {
-  const b = localStorage.getItem('eb_budget');
-  const t = localStorage.getItem('eb_transactions');
-  const g = localStorage.getItem('eb_goals');
-  const nw = localStorage.getItem('eb_networth');
-  state.budget    = b  ? JSON.parse(b)  : JSON.parse(JSON.stringify(DEFAULT_BUDGET));
-  state.transactions = t ? JSON.parse(t) : {};
-  state.goals     = g  ? JSON.parse(g)  : JSON.parse(JSON.stringify(DEFAULT_BUDGET.goals));
-  state.netWorth  = nw ? JSON.parse(nw) : JSON.parse(JSON.stringify(DEFAULT_BUDGET.netWorth));
+function applyState(data) {
+  if (data.budget)       state.budget       = data.budget;
+  if (data.transactions) state.transactions = data.transactions;
+  if (data.goals)        state.goals        = data.goals;
+  if (data.netWorth)     state.netWorth     = data.netWorth;
+  // Merge any new categories
+  DEFAULT_BUDGET.categories.forEach(def=>{
+    const existing = state.budget.categories.find(c=>c.id===def.id);
+    if (!existing) state.budget.categories.push(JSON.parse(JSON.stringify(def)));
+    else if (['car_ins','parking'].includes(def.id)) existing.budget = def.budget;
+  });
 }
-function save() {
+
+function saveLocal() {
   localStorage.setItem('eb_budget',       JSON.stringify(state.budget));
   localStorage.setItem('eb_transactions', JSON.stringify(state.transactions));
   localStorage.setItem('eb_goals',        JSON.stringify(state.goals));
   localStorage.setItem('eb_networth',     JSON.stringify(state.netWorth));
+}
+
+function save() {
+  saveLocal();
+  DOC.set({
+    budget:       JSON.parse(JSON.stringify(state.budget)),
+    transactions: JSON.parse(JSON.stringify(state.transactions)),
+    goals:        JSON.parse(JSON.stringify(state.goals)),
+    netWorth:     JSON.parse(JSON.stringify(state.netWorth)),
+    updatedAt:    firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => console.warn('Firebase save error:', e));
+}
+
+let snapshotListening = false;
+
+function startSnapshot() {
+  if (snapshotListening) return;
+  snapshotListening = true;
+  DOC.onSnapshot({includeMetadataChanges: false}, doc => {
+    if (doc.exists && !doc.metadata.hasPendingWrites) {
+      const data = doc.data();
+      if (data && data.transactions && Object.keys(data.transactions).length > 0) {
+        applyState(data);
+        saveLocal();
+        renderTab(currentTab);
+        toast('Synced ✓');
+      }
+    }
+  }, e => console.warn('Snapshot error:', e));
+}
+
+function load() {
+  // Step 1: Build state from defaults + seed data
+  state.budget       = JSON.parse(JSON.stringify(DEFAULT_BUDGET));
+  state.transactions = {};
+  state.goals        = JSON.parse(JSON.stringify(DEFAULT_BUDGET.goals));
+  state.netWorth     = JSON.parse(JSON.stringify(DEFAULT_BUDGET.netWorth));
+
+  // Step 2: Try to overlay localStorage
+  try {
+    const b  = localStorage.getItem('eb_budget');
+    const t  = localStorage.getItem('eb_transactions');
+    const g  = localStorage.getItem('eb_goals');
+    const nw = localStorage.getItem('eb_networth');
+    if (b)  state.budget       = JSON.parse(b);
+    if (t)  state.transactions = JSON.parse(t);
+    if (g)  state.goals        = JSON.parse(g);
+    if (nw) state.netWorth     = JSON.parse(nw);
+  } catch(e) { console.warn('localStorage parse error:', e); }
+
+  // Step 3: Merge new categories + seed June
+  applyState(state);
+  seedJuneData();
+  updateMonthLabel();
+  renderTab(currentTab);
+
+  // Step 4: Load from Firebase — use it if it has real data, else push ours
+  DOC.get().then(doc => {
+    if (doc.exists) {
+      const data = doc.data();
+      const hasRealData = data && data.transactions && Object.keys(data.transactions).length > 0;
+      if (hasRealData) {
+        applyState(data);
+        saveLocal();
+      } else {
+        // Firebase empty — push our seeded data up
+        save();
+      }
+    } else {
+      // No Firebase doc yet — push everything up
+      save();
+    }
+    updateMonthLabel();
+    renderTab(currentTab);
+    startSnapshot(); // start listening for changes from other devices
+  }).catch(e => {
+    console.warn('Firebase offline, using local data:', e);
+    startSnapshot();
+  });
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -515,25 +870,45 @@ function renderDash() {
     }
   });
 
-  // Progress bars
+  // Group-level Budget vs Actual — cleaner, less congested
   const prog = document.getElementById('dash-progress');
-  const highSpend = state.budget.categories
-    .filter(c=>(spentMap[c.id]||0)>0 || c.budget<300)
-    .sort((a,b)=>(spentMap[b.id]||0)-(spentMap[a.id]||0))
-    .slice(0,8);
-  prog.innerHTML = `<div class="card-title">Budget vs Actual</div>` +
-    highSpend.map(c=>{
-      const s = spentMap[c.id]||0;
-      const pct = c.budget>0 ? Math.min(100,(s/c.budget)*100) : 0;
-      const cls = pct>100?'over':pct>80?'warn':'ok';
-      return `<div class="prog-wrap">
-        <div class="prog-header">
-          <div class="prog-label">${c.name}</div>
-          <div class="prog-amounts">${fmt(s)} / ${fmt(c.budget)}</div>
+  const totalActual = Object.values(spentMap).reduce((s,v)=>s+v,0);
+  const totalBud = totalBudget();
+  const diff = totalActual - totalBud;
+
+  // Roll up to group level
+  const groupBva = {};
+  state.budget.categories.forEach(c=>{
+    if(!groupBva[c.group]) groupBva[c.group]={spent:0,budget:0,color:c.color};
+    groupBva[c.group].spent  += spentMap[c.id]||0;
+    groupBva[c.group].budget += c.budget;
+  });
+
+  prog.innerHTML = `<div class="card-title">Budget vs Actual — ${MONTHS[state.currentMonth]} ${state.currentYear}</div>
+  ${Object.entries(groupBva).filter(([,d])=>d.spent>0||d.budget>0).map(([grp,d])=>{
+    const pct  = d.budget>0 ? Math.min(110,(d.spent/d.budget)*100) : 100;
+    const over = d.budget>0 && d.spent>d.budget;
+    const delta = d.spent - d.budget;
+    return `<div class="prog-wrap">
+      <div class="prog-header">
+        <div class="prog-label">${grp}</div>
+        <div class="prog-amounts">
+          <span class="bva-num" style="color:${over?'var(--red)':'var(--text)'};font-weight:600">${fmt(d.spent)}</span>
+          <span class="bva-num" style="color:var(--muted)"> / ${fmt(d.budget)}</span>
+          ${over
+            ? `<span class="bva-num" style="color:var(--red);font-size:11px;font-weight:700;margin-left:4px">+${fmt(delta)}</span>`
+            : d.budget>0 ? `<span class="bva-num" style="color:var(--green);font-size:11px;margin-left:4px">${fmt(d.budget-d.spent)} left</span>` : ''}
         </div>
-        <div class="prog-bar"><div class="prog-fill ${cls}" style="width:${pct}%;background:${c.color}"></div></div>
-      </div>`;
-    }).join('');
+      </div>
+      <div class="prog-bar">
+        <div class="prog-fill ${over?'over':pct>80?'warn':'ok'}" style="width:${pct}%"></div>
+      </div>
+    </div>`;
+  }).join('')}
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:12px 14px;background:${diff>0?'#fee2e2':'#f0fdf4'};border-radius:12px">
+    <div style="font-size:12px;font-weight:700;color:${diff>0?'var(--red)':'var(--green)'}">${diff>0?'Over budget by':'Under budget by'}</div>
+    <div class="bva-num" style="font-size:17px;font-weight:900;color:${diff>0?'var(--red)':'var(--green)'}">${diff>0?'+':''}${fmt(Math.abs(diff))}</div>
+  </div>`;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -585,11 +960,11 @@ function renderGoals() {
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div>
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.5)">Monthly Savings Plan</div>
-          <div style="font-size:26px;font-weight:900;color:var(--gold);margin-top:4px">${fmt(state.goals.reduce((s,g)=>s+g.monthly,0))}</div>
+          <div class="sensitive" style="font-size:26px;font-weight:900;color:var(--gold);margin-top:4px">${fmt(state.goals.reduce((s,g)=>s+g.monthly,0))}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:11px;color:rgba(255,255,255,.5);font-weight:600">of ${fmt(income)} income</div>
-          <div style="font-size:18px;font-weight:800;color:#4ade80;margin-top:2px">${((state.goals.reduce((s,g)=>s+g.monthly,0)/income)*100).toFixed(1)}%</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.5);font-weight:600">of <span class="sensitive">${fmt(income)}</span> income</div>
+          <div class="sensitive" style="font-size:18px;font-weight:800;color:#4ade80;margin-top:2px">${((state.goals.reduce((s,g)=>s+g.monthly,0)/income)*100).toFixed(1)}%</div>
         </div>
       </div>
     </div>
@@ -609,8 +984,8 @@ function renderGoals() {
             <div class="prog-fill ok" style="width:${pct}%;background:${goal.color}"></div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-            <span style="font-size:13px;color:var(--muted)">${fmt(goal.current)} saved</span>
-            <span style="font-size:13px;font-weight:700">${pct.toFixed(1)}% of ${fmt(goal.target)}</span>
+            <span class="sensitive" style="font-size:13px;color:var(--muted)">${fmt(goal.current)} saved</span>
+            <span class="sensitive" style="font-size:13px;font-weight:700">${pct.toFixed(1)}% of ${fmt(goal.target)}</span>
           </div>` : `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">Open-ended — building wealth 📈</div>`}
         <div class="goal-stats">
           <div class="goal-stat"><div class="goal-stat-val" style="color:${goal.color}">${fmt(goal.monthly)}</div><div class="goal-stat-lbl">Monthly</div></div>
@@ -674,15 +1049,15 @@ function renderBudget() {
     <div class="card" style="background:var(--navy)">
       <div style="display:flex;justify-content:space-between">
         <div style="color:rgba(255,255,255,.6);font-size:13px;font-weight:700">TOTAL BUDGET</div>
-        <div style="color:var(--gold);font-size:16px;font-weight:900">${fmt(totalBudget())}</div>
+        <div class="sensitive" style="color:var(--gold);font-size:16px;font-weight:900">${fmt(totalBudget())}</div>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:6px">
         <div style="color:rgba(255,255,255,.6);font-size:13px;font-weight:700">TOTAL INCOME</div>
-        <div style="color:#4ade80;font-size:16px;font-weight:900">${fmt(totalIncome())}</div>
+        <div class="sensitive" style="color:#4ade80;font-size:16px;font-weight:900">${fmt(totalIncome())}</div>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:6px">
         <div style="color:rgba(255,255,255,.6);font-size:13px;font-weight:700">SAVINGS HEADROOM</div>
-        <div style="font-size:16px;font-weight:900;color:${totalIncome()-totalBudget()>=0?'#a3e635':'#f87171'}">${fmtS(totalIncome()-totalBudget())}</div>
+        <div class="sensitive" style="font-size:16px;font-weight:900;color:${totalIncome()-totalBudget()>=0?'#a3e635':'#f87171'}">${fmtS(totalIncome()-totalBudget())}</div>
       </div>
     </div>
     <div style="height:20px"></div>
@@ -695,6 +1070,104 @@ function saveBudgetEdits() {
     if (cat) cat.budget = parseFloat(inp.value)||0;
   });
   save(); renderBudget(); toast('Budget saved ✓');
+}
+
+// ── Privacy Mode ─────────────────────────────────────────────
+const PIN_HASH = 'd19e5dbfd3d3afe04f12e4f5c12085065e973246970d42608186ab4d20d4a9c5';
+
+function togglePrivacy() {
+  const isPrivate = document.body.classList.contains('privacy-mode');
+  if (isPrivate) {
+    // Need PIN to reveal
+    openPinOverlay();
+  } else {
+    // Instant blur — no PIN needed
+    enablePrivacy();
+  }
+}
+
+function enablePrivacy() {
+  document.body.classList.add('privacy-mode');
+  const btn = document.getElementById('privacy-btn');
+  btn.textContent = '🙈';
+  btn.classList.add('priv-on');
+}
+
+function disablePrivacy() {
+  document.body.classList.remove('privacy-mode');
+  const btn = document.getElementById('privacy-btn');
+  btn.textContent = '👁️';
+  btn.classList.remove('priv-on');
+}
+
+function openPinOverlay() {
+  document.getElementById('pin-input').value = '';
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('pin-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('pin-input').focus(), 200);
+}
+
+function closePinOverlay() {
+  document.getElementById('pin-overlay').classList.remove('open');
+}
+
+async function checkPin() {
+  const val = document.getElementById('pin-input').value.trim();
+  const hash = await hashPw(val);
+  if (hash === PIN_HASH) {
+    closePinOverlay();
+    disablePrivacy();
+  } else {
+    document.getElementById('pin-error').textContent = 'Incorrect PIN. Try again.';
+    document.getElementById('pin-input').value = '';
+    document.getElementById('pin-input').focus();
+  }
+}
+
+// ── Add Category ──────────────────────────────────────────────
+let catWho = 'Chris';
+let catFromTx = false;
+function openCatFromTx() {
+  catFromTx = true;
+  openCatModal();
+}
+function openCatModal() {
+  catWho = 'Chris';
+  document.getElementById('cat-name').value = '';
+  document.getElementById('cat-budget').value = '';
+  document.getElementById('cat-newgroup').value = '';
+  document.querySelectorAll('#cat-modal .who-btn').forEach(b=>b.classList.toggle('sel',b.textContent==='Chris'));
+  // Populate group dropdown
+  const groups = [...new Set(state.budget.categories.map(c=>c.group))];
+  document.getElementById('cat-group').innerHTML = groups.map(g=>`<option value="${g}">${g}</option>`).join('');
+  document.getElementById('cat-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('cat-name').focus(),300);
+}
+function closeCatModal() { document.getElementById('cat-modal').classList.remove('open'); }
+function setCatWho(who,btn) {
+  catWho=who;
+  document.querySelectorAll('#cat-modal .who-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+function saveNewCat() {
+  const name = document.getElementById('cat-name').value.trim();
+  if (!name) { toast('Enter a category name'); return; }
+  const budget = parseFloat(document.getElementById('cat-budget').value)||0;
+  const newGroup = document.getElementById('cat-newgroup').value.trim();
+  const group = newGroup || document.getElementById('cat-group').value;
+  const colors = ['#3b82f6','#8b5cf6','#22c55e','#f59e0b','#ec4899','#06b6d4','#f97316','#10b981','#a855f7','#ef4444'];
+  const color = colors[state.budget.categories.length % colors.length];
+  const id = 'cat_'+Date.now().toString(36);
+  state.budget.categories.push({id, name, budget, group, owner:catWho, color});
+  save();
+  closeCatModal();
+  if (catFromTx) {
+    catFromTx = false;
+    populateCatSelect(id); // refresh tx modal dropdown & select new cat
+  } else {
+    renderBudget();
+  }
+  toast(`"${name}" added ✓`);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -766,11 +1239,16 @@ function saveTx() {
   if (!state.transactions[key]) state.transactions[key] = [];
 
   if (editingTxId) {
-    const mk = monthKey();
-    const txs = state.transactions[mk]||[];
-    const idx = txs.findIndex(t=>t.id===editingTxId);
-    if (idx>=0) txs[idx] = {...txs[idx], amount:amt, catId, note, date, who:txWho};
-    state.transactions[mk] = txs;
+    // Find and remove from whichever month it currently lives in
+    let found = null;
+    Object.keys(state.transactions).forEach(mk => {
+      const idx = state.transactions[mk].findIndex(t=>t.id===editingTxId);
+      if (idx>=0) { found = state.transactions[mk].splice(idx,1)[0]; }
+    });
+    // Insert into the correct month based on the new date
+    const newKey = date.slice(0,7);
+    if (!state.transactions[newKey]) state.transactions[newKey] = [];
+    state.transactions[newKey].push({...(found||{}), amount:amt, catId, note, date, who:txWho, id:editingTxId});
     toast('Transaction updated ✓');
   } else {
     state.transactions[key].push({
@@ -873,7 +1351,7 @@ if ('serviceWorker' in navigator) {
 
 // PWA manifest injection
 const manifest = {
-  name:'Ernest Household Budget', short_name:'Ernest Budget',
+  name:'Bernard Household Budget', short_name:'Bernard Budget',
   start_url:'.', display:'standalone', background_color:'#0f172a',
   theme_color:'#0f172a', description:'Ernest & Rose household budget tracker',
   icons:[{src:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="%230f172a"/><text y=".9em" x="50%" text-anchor="middle" font-size="70">💰</text></svg>',sizes:'192x192',type:'image/svg+xml'}]
@@ -883,9 +1361,14 @@ mlink.rel='manifest';
 mlink.href='data:application/json,'+encodeURIComponent(JSON.stringify(manifest));
 document.head.appendChild(mlink);
 
-load();
+// Always start in privacy mode
+document.body.classList.add('privacy-mode');
+const _pb = document.getElementById('privacy-btn');
+if (_pb) { _pb.textContent = '🙈'; _pb.classList.add('priv-on'); }
+
 updateMonthLabel();
-renderDash();
+renderDash(); // initial render from localStorage
+load();       // async: fetches Firebase, re-renders when ready
 </script>
 </body>
 </html>
